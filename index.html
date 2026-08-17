@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Cyber Runner 3D | Edición Perfeccionada</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <style>
+    :root {
+      --neon-cyan: #00f3ff;
+      --neon-pink: #ff0055;
+      --neon-yellow: #ffea00;
+      --card-bg: rgba(5, 15, 30, 0.92);
+      --font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0; padding: 0;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    body, html {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background-color: #000;
+      font-family: var(--font-family);
+      color: #ffffff;
+    }
+
+    #game-container {
+      position: relative;
+      width: 100vw; height: 100vh;
+      overflow: hidden;
+    }
+
+    #canvas-3d {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 1;
+    }
+
+    #damage-flash, #offroad-flash, #coin-flash {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 3;
+      transition: opacity 0.1s ease;
+      opacity: 0;
+    }
+    #damage-flash { background-color: rgba(255, 0, 85, 0.4); }
+    #offroad-flash { background-color: rgba(255, 68, 0, 0.35); }
+    #coin-flash { background-color: rgba(255, 234, 0, 0.25); }
+
+    .flash-active { opacity: 1 !important; }
+
+    .hud-layer {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 10; padding: 15px;
+    }
+
+    .hud-group { position: absolute; display: flex; gap: 10px; }
+    .hud-top-left { top: 15px; left: 15px; }
+    .hud-top-right { top: 15px; right: 15px; }
+    .hud-bottom-left { bottom: 85px; left: 15px; }
+    .hud-bottom-right { bottom: 85px; right: 15px; }
+
+    .hud-card {
+      background: var(--card-bg);
+      border: 1px solid var(--neon-cyan);
+      padding: 8px 14px;
+      border-radius: 8px;
+      display: flex; flex-direction: column;
+      box-shadow: 0 0 15px rgba(0, 243, 255, 0.25);
+    }
+
+    .hud-card.highlight-coin { border-color: var(--neon-yellow); }
+    .hud-card.wide { width: 200px; }
+    .hud-label { font-size: 0.65rem; color: #aaa; letter-spacing: 1px; }
+    .hud-value { font-size: 1.2rem; font-weight: bold; color: var(--neon-cyan); }
+    .hud-value-lg { font-size: 1.6rem; font-weight: bold; color: #fff; }
+    .hud-unit { font-size: 0.7rem; color: var(--neon-pink); }
+
+    .progress-bar-bg {
+      width: 100%; height: 10px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 5px; overflow: hidden; margin-top: 4px;
+    }
+
+    .progress-bar-fill {
+      height: 100%; width: 100%;
+      background: linear-gradient(90deg, var(--neon-pink), var(--neon-yellow));
+      transition: width 0.1s linear;
+    }
+
+    .ui-layer {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 20; pointer-events: none;
+    }
+
+    .menu-screen {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; justify-content: center; align-items: center;
+      background: rgba(2, 8, 20, 0.88);
+      pointer-events: auto;
+      backdrop-filter: blur(6px);
+    }
+
+    .menu-card {
+      width: 90%; max-width: 460px;
+      background: var(--card-bg);
+      border: 2px solid var(--neon-cyan);
+      border-radius: 14px; padding: 25px;
+      text-align: center;
+      box-shadow: 0 0 35px rgba(0, 243, 255, 0.35);
+    }
+
+    .game-title { font-size: 2.2rem; font-weight: 900; letter-spacing: 2px; color: #fff; }
+    .game-title .accent { color: var(--neon-pink); }
+    .game-subtitle { font-size: 0.75rem; color: var(--neon-yellow); margin-bottom: 20px; }
+
+    .menu-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+
+    .btn {
+      padding: 12px 20px;
+      border-radius: 8px; font-weight: bold;
+      border: none; cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-primary { background: linear-gradient(90deg, var(--neon-pink), #9900ff); color: #fff; }
+    .btn-shop { background: linear-gradient(90deg, #ffea00, #ff8800); color: #000; }
+    .btn-secondary { background: transparent; color: var(--neon-cyan); border: 1px solid var(--neon-cyan); }
+
+    .shop-balance { margin: 10px 0 15px 0; font-size: 1.1rem; }
+    .theme-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+
+    .theme-card {
+      display: flex; align-items: center; gap: 15px;
+      background: rgba(255,255,255,0.05);
+      padding: 12px; border-radius: 8px;
+      border: 1px solid transparent; cursor: pointer;
+    }
+    .theme-card.active { border-color: var(--neon-yellow); background: rgba(255, 234, 0, 0.12); }
+
+    .theme-preview { width: 50px; height: 35px; border-radius: 4px; }
+    .beach-bg { background: linear-gradient(135deg, #00d2ff, #ffea00); }
+    .aquatic-bg { background: linear-gradient(135deg, #001122, #00d2ff); }
+    .jungle-bg { background: linear-gradient(135deg, #051a05, #2e8b57); }
+
+    .theme-info { flex: 1; display: flex; justify-content: space-between; align-items: center; text-align: left; }
+    .theme-info h3 { font-size: 0.95rem; }
+    .badge-status { color: var(--neon-yellow); font-weight: bold; font-size: 0.8rem; }
+
+    #mobile-controls {
+      position: absolute; bottom: 15px; left: 0; width: 100%;
+      display: flex; justify-content: space-between; padding: 0 20px;
+      z-index: 15; pointer-events: none;
+    }
+    .touch-btn-container { display: flex; gap: 12px; pointer-events: auto; }
+    .touch-btn {
+      width: 62px; height: 62px; border-radius: 50%;
+      background: rgba(10, 10, 25, 0.75);
+      border: 2px solid var(--neon-cyan);
+      color: var(--neon-cyan); font-size: 1.5rem; font-weight: bold;
+      box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+    }
+    .touch-btn:active {
+      background: var(--neon-cyan);
+      color: #000;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <div id="canvas-3d"></div>
+
+    <div id="damage-flash"></div>
+    <div id="offroad-flash"></div>
+    <div id="coin-flash"></div>
+
+    <header id="hud" class="hud-layer hidden">
+      <div class="hud-group hud-top-left">
+        <div class="hud-card">
+          <span class="hud-label">DISTANCIA</span>
+          <span class="hud-value" id="hud-distance">0 <small>m</small></span>
+        </div>
+        <div class="hud-card highlight-coin">
+          <span class="hud-label">MONEDAS</span>
+          <span class="hud-value" id="hud-coins">🪙 0</span>
+        </div>
+      </div>
+
+      <div class="hud-group hud-top-right">
+        <div class="hud-card">
+          <span class="hud-label">PUNTAJE</span>
+          <span class="hud-value" id="hud-score">000000</span>
+        </div>
+      </div>
+
+      <div class="hud-group hud-bottom-left">
+        <div class="hud-card wide">
+          <div style="display:flex; justify-content:space-between;">
+            <span class="hud-label">INTEGRIDAD</span>
+            <span class="hud-label" id="hud-health-num">100%</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="hud-health-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hud-group hud-bottom-right">
+        <div class="hud-card">
+          <span class="hud-value-lg" id="hud-speed">0</span>
+          <span class="hud-unit">KM/H</span>
+        </div>
+      </div>
+    </header>
+
+    <div id="mobile-controls" class="hidden">
+      <div class="touch-btn-container">
+        <button id="touch-left" class="touch-btn">◀</button>
+        <button id="touch-right" class="touch-btn">▶</button>
+      </div>
+      <div class="touch-btn-container">
+        <button id="touch-brake" class="touch-btn">🛑</button>
+        <button id="touch-accel" class="touch-btn">⚡</button>
+      </div>
+    </div>
+
+    <div id="ui-layer" class="ui-layer">
+
+      <section id="menu-main" class="menu-screen">
+        <div class="menu-card">
+          <h1 class="game-title">CYBER<span class="accent"> RUNNER</span></h1>
+          <p class="game-subtitle">EDICIÓN ENTORNOS DETALLADOS 3D</p>
+
+          <div class="menu-actions">
+            <button id="btn-play" class="btn btn-primary">INICIAR CARRERA</button>
+            <button id="btn-shop" class="btn btn-shop">🛍️ TIENDA DE ENTORNOS</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="menu-shop" class="menu-screen hidden">
+        <div class="menu-card">
+          <h2>TIENDA DE ENTORNOS</h2>
+          <p class="shop-balance">Monedas: <strong id="shop-coin-count" style="color:var(--neon-yellow)">🪙 0</strong></p>
+
+          <div class="theme-grid">
+            <div class="theme-card active" id="card-beach">
+              <div class="theme-preview beach-bg"></div>
+              <div class="theme-info">
+                <h3>🏖️ Playa Paradise</h3>
+                <span class="badge-status" id="status-beach">EN USO</span>
+              </div>
+            </div>
+
+            <div class="theme-card" id="card-aquatic">
+              <div class="theme-preview aquatic-bg"></div>
+              <div class="theme-info">
+                <h3>🌊 Abismo Acuático</h3>
+                <button class="btn btn-shop" id="btn-buy-aquatic" style="padding: 5px 10px; font-size:0.75rem;">COMPRAR (🪙 10)</button>
+              </div>
+            </div>
+
+            <div class="theme-card" id="card-jungle">
+              <div class="theme-preview jungle-bg"></div>
+              <div class="theme-info">
+                <h3>🌴 Selva Tropical</h3>
+                <button class="btn btn-shop" id="btn-buy-jungle" style="padding: 5px 10px; font-size:0.75rem;">COMPRAR (🪙 20)</button>
+              </div>
+            </div>
+          </div>
+
+          <button id="btn-back-shop" class="btn btn-secondary">VOLVER AL MENÚ</button>
+        </div>
+      </section>
+
+      <section id="menu-gameover" class="menu-screen hidden">
+        <div class="menu-card" style="border-color: var(--neon-pink);">
+          <h1 style="color:var(--neon-pink); font-size:1.8rem; margin-bottom:10px;">¡VEHÍCULO DESTRUIDO!</h1>
+          <p style="margin-bottom:15px; font-size:0.9rem;">Has colisionado o te saliste del camino.</p>
+          <div class="menu-actions">
+            <button id="btn-retry" class="btn btn-primary">REINTENTAR</button>
+            <button id="btn-main-menu-go" class="btn btn-secondary">MENÚ PRINCIPAL</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <script>
+    const THEMES = {
+      beach: {
+        sky: 0x40c4ff,
+        ground: 0xedd382,
+        road: 0x33333d,
+        border: 0xffd700,
+        fogDensity: 0.001,
+        lightColor: 0xfffaed,
+        propType: 'palm'
+      },
+      aquatic: {
+        sky: 0x00122e,
+        ground: 0x00284d,
+        road: 0x003355,
+        border: 0x00ffff,
+        fogDensity: 0.003,
+        lightColor: 0x00aaff,
+        propType: 'aquatic'
+      },
+      jungle: {
+        sky: 0x0d2612,
+        ground: 0x183a1d,
+        road: 0x222222,
+        border: 0x39ff14,
+        fogDensity: 0.003,
+        lightColor: 0xaaffaa,
+        propType: 'dense_jungle'
+      }
+    };
+
+    class Game3D {
+      constructor() {
+        this.container = document.getElementById('canvas-3d');
+        this.state = 'MENU';
+        
+        this.baseSpeed = 0.8;
+        this.speed = 0;
+        this.maxSpeed = 1.7;
+        this.minSpeed = 0.45;
+        
+        this.health = 100;
+        this.score = 0;
+        this.coins = 0;
+        this.distance = 0;
+
+        this.currentTheme = 'beach';
+        this.unlockedThemes = ['beach'];
+
+        this.roadWidth = 14;
+        this.keys = { left: false, right: false, accel: false, brake: false };
+        
+        this.obstacles = [];
+        this.coinsList = [];
+        this.propsList = [];
+        this.bubbles = [];
+
+        this.initThree();
+        this.createScene();
+        this.bindEvents();
+        this.updateShopUI();
+        this.animate();
+      }
+
+      initThree() {
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        this.container.appendChild(this.renderer.domElement);
+
+        this.camera.position.set(0, 3.8, -7.5);
+        this.camera.lookAt(0, 1.2, 10);
+      }
+
+      createScene() {
+        this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        this.scene.add(this.ambientLight);
+
+        this.dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        this.dirLight.position.set(0, 40, 20);
+        this.scene.add(this.dirLight);
+
+        this.createSun();
+        this.createPlayerCar();
+        this.buildEnvironment();
+      }
+
+      createSun() {
+        const sunGeo = new THREE.SphereGeometry(12, 32, 32);
+        const sunMat = new THREE.MeshBasicMaterial({ color: 0xffea00 });
+        this.sunMesh = new THREE.Mesh(sunGeo, sunMat);
+        this.sunMesh.position.set(0, 18, 400);
+        this.scene.add(this.sunMesh);
+      }
+
+      createPlayerCar() {
+        this.carGroup = new THREE.Group();
+
+        const bodyGeo = new THREE.BoxGeometry(1.8, 0.55, 3.6);
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff0055, roughness: 0.2, metalness: 0.7 });
+        const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+        bodyMesh.position.y = 0.5;
+        this.carGroup.add(bodyMesh);
+
+        const cabinGeo = new THREE.BoxGeometry(1.3, 0.5, 1.8);
+        const cabinMat = new THREE.MeshStandardMaterial({ color: 0x00f3ff, roughness: 0.1, metalness: 0.9, transparent: true, opacity: 0.85 });
+        const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
+        cabinMesh.position.set(0, 0.9, -0.2);
+        this.carGroup.add(cabinMesh);
+
+        const wheelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.32, 24);
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
+        wheelGeo.rotateZ(Math.PI / 2);
+
+        [[-0.98, 0.38, 1.1], [0.98, 0.38, 1.1], [-0.98, 0.38, -1.1], [0.98, 0.38, -1.1]].forEach(pos => {
+          const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+          wheel.position.set(...pos);
+          this.carGroup.add(wheel);
+        });
+
+        this.scene.add(this.carGroup);
+      }
+
+      buildEnvironment() {
+        const theme = THEMES[this.currentTheme];
+        this.scene.background = new THREE.Color(theme.sky);
+        this.scene.fog = new THREE.FogExp2(theme.sky, theme.fogDensity);
+        this.dirLight.color.setHex(theme.lightColor);
+
+        // Ajustar visión del Sol según el tema
+        if (this.sunMesh) {
+          this.sunMesh.visible = (this.currentTheme === 'beach');
+        }
+
+        // Terreno
+        if (!this.groundMesh) {
+          const groundGeo = new THREE.PlaneGeometry(350, 2000);
+          this.groundMat = new THREE.MeshStandardMaterial({ color: theme.ground, roughness: 0.9 });
+          this.groundMesh = new THREE.Mesh(groundGeo, this.groundMat);
+          this.groundMesh.rotation.x = -Math.PI / 2;
+          this.scene.add(this.groundMesh);
+        } else {
+          this.groundMat.color.setHex(theme.ground);
+        }
+
+        // Asfalto
+        if (!this.roadMesh) {
+          const roadGeo = new THREE.PlaneGeometry(this.roadWidth, 2000);
+          this.roadMat = new THREE.MeshStandardMaterial({ 
+            color: theme.road, 
+            roughness: 0.4, 
+            metalness: this.currentTheme === 'aquatic' ? 0.6 : 0.1,
+            transparent: true,
+            opacity: this.currentTheme === 'aquatic' ? 0.85 : 1.0
+          });
+          this.roadMesh = new THREE.Mesh(roadGeo, this.roadMat);
+          this.roadMesh.rotation.x = -Math.PI / 2;
+          this.roadMesh.position.y = 0.01;
+          this.scene.add(this.roadMesh);
+        } else {
+          this.roadMat.color.setHex(theme.road);
+          this.roadMat.opacity = this.currentTheme === 'aquatic' ? 0.85 : 1.0;
+        }
+
+        this.resetTrackItems();
+      }
+
+      resetTrackItems() {
+        this.obstacles.forEach(o => this.scene.remove(o.mesh));
+        this.coinsList.forEach(c => this.scene.remove(c.mesh));
+        this.propsList.forEach(p => this.scene.remove(p));
+        this.bubbles.forEach(b => this.scene.remove(b));
+
+        this.obstacles = [];
+        this.coinsList = [];
+        this.propsList = [];
+        this.bubbles = [];
+
+        for (let z = 30; z < 600; z += 18) {
+          this.spawnRow(z);
+        }
+
+        if (this.currentTheme === 'aquatic') {
+          const bubbleGeo = new THREE.SphereGeometry(0.35, 8, 8);
+          const bubbleMat = new THREE.MeshBasicMaterial({ color: 0x66ffff, transparent: true, opacity: 0.5 });
+          for (let i = 0; i < 50; i++) {
+            const bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
+            bubble.position.set((Math.random() - 0.5) * 45, Math.random() * 16, Math.random() * 200);
+            this.scene.add(bubble);
+            this.bubbles.push(bubble);
+          }
+        }
+      }
+
+      createPalmTree() {
+        const group = new THREE.Group();
+        // Tronco curvado
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.9 });
+        for (let i = 0; i < 5; i++) {
+          const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.35 - i*0.03, 0.4 - i*0.03, 1.2), trunkMat);
+          seg.position.set(Math.sin(i * 0.2) * 0.3, i * 1.0 + 0.6, 0);
+          seg.rotation.z = -0.08 * i;
+          group.add(seg);
+        }
+        // Hojas de palmera 🌴
+        const leafMat = new THREE.MeshStandardMaterial({ color: 0x2e8b57, side: THREE.DoubleSide });
+        for (let i = 0; i < 6; i++) {
+          const angle = (i / 6) * Math.PI * 2;
+          const leaf = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 3.2), leafMat);
+          leaf.position.set(Math.sin(angle) * 1.2 + 0.3, 5.2, Math.cos(angle) * 1.2);
+          leaf.rotation.x = Math.PI / 3;
+          leaf.rotation.y = angle;
+          group.add(leaf);
+        }
+        return group;
+      }
+
+      createJungleTree() {
+        const group = new THREE.Group();
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 4.5), new THREE.MeshStandardMaterial({ color: 0x3d2314 }));
+        trunk.position.y = 2.25;
+        group.add(trunk);
+
+        const leafColors = [0x1e5622, 0x113f15, 0x2d7332];
+        leafColors.forEach((col, idx) => {
+          const foliage = new THREE.Mesh(new THREE.SphereGeometry(2.2 - idx * 0.3, 8, 8), new THREE.MeshStandardMaterial({ color: col, roughness: 0.8 }));
+          foliage.position.y = 4.2 + idx * 1.2;
+          group.add(foliage);
+        });
+        return group;
+      }
+
+      spawnRow(z) {
+        const theme = THEMES[this.currentTheme];
+
+        // PROPS LATERALES SEGÚN TEMA
+        if (theme.propType === 'palm') {
+          [-11, 11].forEach(x => {
+            const palm = this.createPalmTree();
+            palm.position.set(x + (Math.random() * 3 - 1.5), 0, z);
+            this.scene.add(palm);
+            this.propsList.push(palm);
+          });
+        } else if (theme.propType === 'dense_jungle') {
+          // Selva densa: Múltiples árboles a varios lados
+          [-18, -12, -8, 8, 12, 18].forEach(x => {
+            if (Math.random() < 0.85) {
+              const tree = this.createJungleTree();
+              tree.position.set(x + (Math.random() * 2 - 1), 0, z + (Math.random() * 4 - 2));
+              this.scene.add(tree);
+              this.propsList.push(tree);
+            }
+          });
+        } else if (theme.propType === 'aquatic') {
+          [-12, 12].forEach(x => {
+            const group = new THREE.Group();
+            if (Math.random() < 0.5) {
+              const col = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 8, 8), new THREE.MeshStandardMaterial({ color: 0x0088aa, roughness: 0.3 }));
+              col.position.y = 4;
+              group.add(col);
+            } else {
+              const kelp = new THREE.Mesh(new THREE.ConeGeometry(0.7, 6, 6), new THREE.MeshStandardMaterial({ color: 0x00ffaa, roughness: 0.2 }));
+              kelp.position.y = 3;
+              group.add(kelp);
+            }
+            group.position.set(x + (Math.random() * 2 - 1), 0, z);
+            this.scene.add(group);
+            this.propsList.push(group);
+          });
+        }
+
+        // OBSTÁCULOS Y MONEDAS
+        const lane = (Math.floor(Math.random() * 3) - 1) * 3.8;
+        if (Math.random() < 0.6) {
+          const obsGroup = new THREE.Group();
+          const color = this.currentTheme === 'aquatic' ? 0xff0088 : (this.currentTheme === 'jungle' ? 0xcf1b1b : 0xd0312d);
+          const boxMesh = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.2, 0.8), new THREE.MeshStandardMaterial({ color: color }));
+          boxMesh.position.y = 0.6;
+          obsGroup.add(boxMesh);
+          obsGroup.position.set(lane, 0, z);
+          this.scene.add(obsGroup);
+          this.obstacles.push({ mesh: obsGroup, hit: false, z: z, x: lane });
+        } else {
+          const coinGroup = new THREE.Group();
+          const coinMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.15, 16), new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.9 }));
+          coinMesh.rotation.x = Math.PI / 2;
+          coinGroup.add(coinMesh);
+          coinGroup.position.set(lane, 1.0, z);
+          this.scene.add(coinGroup);
+          this.coinsList.push({ mesh: coinGroup, collected: false, z: z, x: lane });
+        }
+      }
+
+      bindEvents() {
+        window.addEventListener('resize', () => {
+          this.camera.aspect = window.innerWidth / window.innerHeight;
+          this.camera.updateProjectionMatrix();
+          this.renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.addEventListener('keydown', (e) => this.handleKey(e, true));
+        window.addEventListener('keyup', (e) => this.handleKey(e, false));
+
+        document.getElementById('btn-play').onclick = () => this.startGame();
+        document.getElementById('btn-shop').onclick = () => { this.updateShopUI(); this.showScreen('menu-shop'); };
+        document.getElementById('btn-back-shop').onclick = () => this.showScreen('menu-main');
+        document.getElementById('btn-retry').onclick = () => this.startGame();
+        document.getElementById('btn-main-menu-go').onclick = () => this.showScreen('menu-main');
+
+        document.getElementById('btn-buy-aquatic').onclick = (e) => { e.stopPropagation(); this.buyTheme('aquatic', 10); };
+        document.getElementById('btn-buy-jungle').onclick = (e) => { e.stopPropagation(); this.buyTheme('jungle', 20); };
+
+        document.getElementById('card-beach').onclick = () => this.selectTheme('beach');
+        document.getElementById('card-aquatic').onclick = () => this.selectTheme('aquatic');
+        document.getElementById('card-jungle').onclick = () => this.selectTheme('jungle');
+
+        const bindTouch = (id, keyName) => {
+          const btn = document.getElementById(id);
+          btn.addEventListener('touchstart', (e) => { e.preventDefault(); this.keys[keyName] = true; }, { passive: false });
+          btn.addEventListener('touchend', (e) => { e.preventDefault(); this.keys[keyName] = false; }, { passive: false });
+          btn.addEventListener('mousedown', () => { this.keys[keyName] = true; });
+          btn.addEventListener('mouseup', () => { this.keys[keyName] = false; });
+        };
+
+        bindTouch('touch-left', 'left');
+        bindTouch('touch-right', 'right');
+        bindTouch('touch-accel', 'accel');
+        bindTouch('touch-brake', 'brake');
+      }
+
+      handleKey(e, isPressed) {
+        switch (e.code) {
+          case 'KeyA': case 'ArrowLeft': this.keys.left = isPressed; break;
+          case 'KeyD': case 'ArrowRight': this.keys.right = isPressed; break;
+          case 'KeyW': case 'ArrowUp': this.keys.accel = isPressed; break;
+          case 'KeyS': case 'ArrowDown': this.keys.brake = isPressed; break;
+        }
+      }
+
+      buyTheme(key, cost) {
+        if (this.coins >= cost && !this.unlockedThemes.includes(key)) {
+          this.coins -= cost;
+          this.unlockedThemes.push(key);
+          this.selectTheme(key);
+        } else if (this.coins < cost) {
+          alert("¡Te faltan monedas! Consigue más jugando.");
+        }
+      }
+
+      selectTheme(key) {
+        if (this.unlockedThemes.includes(key)) {
+          this.currentTheme = key;
+          this.buildEnvironment();
+          this.updateShopUI();
+        }
+      }
+
+      updateShopUI() {
+        document.getElementById('shop-coin-count').innerText = `🪙 ${this.coins}`;
+
+        ['beach', 'aquatic', 'jungle'].forEach(key => {
+          const card = document.getElementById(`card-${key}`);
+          card.classList.remove('active');
+
+          if (this.unlockedThemes.includes(key)) {
+            const info = card.querySelector('.theme-info');
+            if (key === this.currentTheme) {
+              card.classList.add('active');
+              info.innerHTML = `<h3>${key.toUpperCase()}</h3><span class="badge-status">EN USO</span>`;
+            } else {
+              info.innerHTML = `<h3>${key.toUpperCase()}</h3><span class="badge-status" style="color:var(--neon-cyan)">DISPONIBLE</span>`;
+            }
+          }
+        });
+      }
+
+      showScreen(id) {
+        document.querySelectorAll('.menu-screen').forEach(s => s.classList.add('hidden'));
+        const target = document.getElementById(id);
+        if (target) target.classList.remove('hidden');
+      }
+
+      startGame() {
+        this.carGroup.position.set(0, 0, 0);
+        this.speed = this.baseSpeed;
+        this.health = 100;
+        this.score = 0;
+        this.distance = 0;
+        this.buildEnvironment();
+
+        this.state = 'PLAYING';
+        document.querySelectorAll('.menu-screen').forEach(s => s.classList.add('hidden'));
+        document.getElementById('hud').classList.remove('hidden');
+        document.getElementById('mobile-controls').classList.remove('hidden');
+      }
+
+      triggerFlash(id) {
+        const el = document.getElementById(id);
+        el.classList.add('flash-active');
+        setTimeout(() => el.classList.remove('flash-active'), 120);
+      }
+
+      update() {
+        if (this.state !== 'PLAYING') return;
+
+        if (this.keys.accel) {
+          this.speed = Math.min(this.maxSpeed, this.speed + 0.015);
+        } else if (this.keys.brake) {
+          this.speed = Math.max(this.minSpeed, this.speed - 0.025);
+        } else {
+          if (this.speed > this.baseSpeed) this.speed -= 0.008;
+          if (this.speed < this.baseSpeed) this.speed += 0.008;
+        }
+
+        this.carGroup.position.z += this.speed;
+        this.distance = this.carGroup.position.z;
+
+        this.groundMesh.position.z = this.carGroup.position.z + 500;
+        this.roadMesh.position.z = this.carGroup.position.z + 500;
+        this.dirLight.position.z = this.carGroup.position.z + 20;
+
+        if (this.sunMesh) {
+          this.sunMesh.position.z = this.carGroup.position.z + 400;
+        }
+
+        if (this.keys.left) {
+          this.carGroup.position.x += 0.2;
+          this.carGroup.rotation.y = -0.18;
+        } else if (this.keys.right) {
+          this.carGroup.position.x -= 0.2;
+          this.carGroup.rotation.y = 0.18;
+        } else {
+          this.carGroup.rotation.y = 0;
+        }
+
+        this.camera.position.z = this.carGroup.position.z - 7.5;
+        this.camera.position.x = this.carGroup.position.x * 0.45;
+
+        const lastZ = this.propsList.length > 0 ? this.propsList[this.propsList.length - 1].position.z : this.carGroup.position.z;
+        if (lastZ - this.carGroup.position.z < 400) {
+          this.spawnRow(lastZ + 18);
+        }
+
+        this.obstacles = this.obstacles.filter(o => {
+          if (o.z < this.carGroup.position.z - 15) { this.scene.remove(o.mesh); return false; }
+          return true;
+        });
+
+        this.coinsList = this.coinsList.filter(c => {
+          if (c.z < this.carGroup.position.z - 15) { this.scene.remove(c.mesh); return false; }
+          return true;
+        });
+
+        this.bubbles.forEach(b => {
+          b.position.y += 0.04;
+          if (b.position.y > 16) b.position.y = 0;
+          if (b.position.z < this.carGroup.position.z - 10) b.position.z = this.carGroup.position.z + 120;
+        });
+
+        const limitX = (this.roadWidth / 2) - 0.9;
+        if (Math.abs(this.carGroup.position.x) > limitX) {
+          this.health -= 0.6;
+          this.triggerFlash('offroad-flash');
+          if (this.health <= 0) this.gameOver();
+        }
+
+        this.coinsList.forEach(c => { if (!c.collected) c.mesh.rotation.y += 0.05; });
+
+        this.obstacles.forEach(obs => {
+          if (!obs.hit && Math.abs(obs.z - this.carGroup.position.z) < 1.6) {
+            if (Math.abs(obs.x - this.carGroup.position.x) < 1.7) {
+              obs.hit = true;
+              this.health -= 30;
+              this.speed = this.minSpeed;
+              this.triggerFlash('damage-flash');
+              if (this.health <= 0) this.gameOver();
+            }
+          }
+        });
+
+        this.coinsList.forEach(c => {
+          if (!c.collected && Math.abs(c.z - this.carGroup.position.z) < 1.6) {
+            if (Math.abs(c.x - this.carGroup.position.x) < 1.7) {
+              c.collected = true;
+              this.scene.remove(c.mesh);
+              this.coins += 1;
+              this.score += 250;
+              this.triggerFlash('coin-flash');
+            }
+          }
+        });
+
+        this.score += Math.floor(this.speed * 10);
+        this.updateHUD();
+      }
+
+      updateHUD() {
+        document.getElementById('hud-distance').innerHTML = `${Math.floor(this.distance)} <small>m</small>`;
+        document.getElementById('hud-coins').innerText = `🪙 ${this.coins}`;
+        document.getElementById('hud-score').innerText = String(this.score).padStart(6, '0');
+        document.getElementById('hud-speed').innerText = Math.floor(this.speed * 110);
+        document.getElementById('hud-health-bar').style.width = `${Math.max(0, this.health)}%`;
+        document.getElementById('hud-health-num').innerText = `${Math.floor(Math.max(0, this.health))}%`;
+      }
+
+      gameOver() {
+        this.state = 'GAMEOVER';
+        this.showScreen('menu-gameover');
+      }
+
+      animate() {
+        requestAnimationFrame(() => this.animate());
+        this.update();
+        this.renderer.render(this.scene, this.camera);
+      }
+    }
+
+    window.onload = () => { new Game3D(); };
+  </script>
+</body>
+</html>
